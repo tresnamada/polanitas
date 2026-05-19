@@ -4,7 +4,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useAccessibility } from "@/hooks/use-accessibility";
 import { useWebGazer } from "@/hooks/use-webgazer";
-import { Eye, EyeOff, Target, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { useDraggable } from "@/hooks/use-draggable";
+import { Eye, EyeOff, Target, ChevronUp, ChevronDown, Loader2, GripVertical } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ── Dwell configuration ────────────────────────────────────────────────────────
@@ -20,6 +21,12 @@ export function EyeTrackingNavigation() {
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isCalibrating, setIsCalibrating] = useState(false);
+
+  const { position, isDragging, dragHandleProps, containerRef } = useDraggable({
+    storageKey: "polanitas_eyetracking_pos",
+    defaultRight: 32,
+    defaultBottom: 96,
+  });
 
   // Dwell & Position state
   const [dwellProgress, setDwellProgress] = useState(0);
@@ -112,6 +119,63 @@ export function EyeTrackingNavigation() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Handle WebGazer video DOM manipulation
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (enabled && isTracking) {
+      interval = setInterval(() => {
+        const slot = document.getElementById('wg-container-slot');
+        if (!slot) return;
+
+        const wgContainer = document.getElementById('webgazerVideoContainer');
+        const video = document.getElementById('webgazerVideoFeed');
+        const canvas = document.getElementById('webgazerVideoCanvas');
+        const faceOverlay = document.getElementById('webgazerFaceOverlay');
+        const feedbackBox = document.getElementById('webgazerFaceFeedbackBox');
+
+        [video, canvas, faceOverlay].forEach((el) => {
+          if (el && el.parentElement !== slot) {
+            slot.appendChild(el);
+          }
+        });
+
+        if (wgContainer) {
+          wgContainer.style.display = 'none';
+        }
+        if (feedbackBox) {
+          feedbackBox.style.display = 'none';
+        }
+
+        [video, canvas, faceOverlay].forEach((el) => {
+          if (el) {
+            el.style.display = 'block';
+            el.style.setProperty('position', 'absolute', 'important');
+            el.style.setProperty('top', '0', 'important');
+            el.style.setProperty('left', '50%', 'important');
+            el.style.setProperty('transform', 'translateX(-50%)', 'important');
+            el.style.setProperty('height', '100%', 'important');
+            el.style.setProperty('width', 'auto', 'important');
+            el.style.setProperty('max-width', 'none', 'important');
+            el.style.setProperty('border-radius', '8px', 'important');
+            el.style.setProperty('z-index', '10', 'important');
+          }
+        });
+
+        if (faceOverlay) {
+          faceOverlay.style.setProperty('z-index', '11', 'important');
+        }
+      }, 500);
+    } else {
+      ['webgazerVideoContainer', 'webgazerVideoFeed', 'webgazerVideoCanvas', 'webgazerFaceOverlay', 'webgazerFaceFeedbackBox'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [enabled, isTracking]);
 
   useEffect(() => {
     if (enabled && isReady && !isTracking) {
@@ -213,7 +277,17 @@ export function EyeTrackingNavigation() {
       )}
 
       {/* Widget UI */}
-      <div className="flex flex-col items-end gap-3 pointer-events-none">
+      <div
+        ref={containerRef}
+        className="fixed z-[9990]"
+        style={{
+          left: position?.x ?? 0,
+          top: position?.y ?? 0,
+          opacity: position ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease',
+        }}
+      >
+       <div className="flex flex-col items-end gap-3">
         <AnimatePresence>
           {feedback && (
             <motion.div
@@ -227,10 +301,14 @@ export function EyeTrackingNavigation() {
           )}
         </AnimatePresence>
 
-        <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] pointer-events-auto backdrop-blur-xl bg-opacity-95 transition-all duration-300">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-muted/20">
-            <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:block">
+        <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] backdrop-blur-xl bg-opacity-95 transition-all duration-300">
+          {/* Header — drag handle */}
+          <div
+            {...dragHandleProps}
+            className="flex items-center justify-between px-4 py-3 bg-muted/20 select-none"
+          >
+            <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:flex">
+              <GripVertical size={12} className="text-muted shrink-0 opacity-50" />
               {!isReady ? (
                 <Loader2 size={14} className="text-primary animate-spin shrink-0" />
               ) : isTracking ? (
@@ -249,7 +327,7 @@ export function EyeTrackingNavigation() {
                 onClick={() => setEnabled(!enabled)}
                 disabled={!isReady}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer border-none outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed
-                  ${enabled ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
+                  ${enabled ? "bg-primary text-[color:var(--color-bg)] shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                 title={enabled ? "Matikan Tracker" : "Aktifkan Tracker"}
               >
                 {enabled ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -279,6 +357,16 @@ export function EyeTrackingNavigation() {
                   <p className="text-xs text-muted-foreground leading-relaxed text-center">
                     Tatap sebuah area selama <b>1.5 detik</b>, atau <b>kedipkan mata</b> untuk klik otomatis.
                   </p>
+
+                  {/* WebGazer Video Container Slot */}
+                  {enabled && (
+                    <div id="wg-container-slot" className="w-full flex justify-center rounded-lg overflow-hidden bg-black/5 min-h-[140px] relative">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <Loader2 className="w-5 h-5 text-muted animate-spin" />
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => setIsCalibrating(true)}
                     className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold py-2.5 px-4 rounded-lg transition-colors border-none cursor-pointer outline-none focus:ring-2 focus:ring-primary/50"
@@ -295,6 +383,7 @@ export function EyeTrackingNavigation() {
             )}
           </AnimatePresence>
         </div>
+       </div>
       </div>
     </>
   );

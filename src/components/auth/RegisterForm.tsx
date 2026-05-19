@@ -11,7 +11,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase-client";
 import { createSession } from "@/actions/auth-actions";
-import { Mail, Lock, User, UserPlus, AlertCircle, Globe, CheckCircle } from "lucide-react";
+import { Mail, Lock, User, UserPlus, AlertCircle, Globe, CheckCircle, Loader2 } from "lucide-react";
 import { ThemeLogo } from "@/components/layout/ThemeLogo";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -284,8 +284,18 @@ export default function RegisterForm() {
             className="btn btn-primary w-full justify-center py-3 shadow-[0_4px_12px_var(--color-accent-glow)]"
             disabled={loading}
           >
-            <UserPlus size={15} strokeWidth={2.5} />
-            {isPending ? "Membuat akun..." : "Buat Akun"}
+            {loading ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="flex items-center justify-center"
+              >
+                <Loader2 size={15} strokeWidth={2.5} />
+              </motion.div>
+            ) : (
+              <UserPlus size={15} strokeWidth={2.5} />
+            )}
+            {isPending ? "Memproses..." : "Buat Akun"}
           </motion.button>
         </form>
 

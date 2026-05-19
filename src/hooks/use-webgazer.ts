@@ -132,7 +132,7 @@ export function useWebGazer() {
       // Configure WebGazer UI elements
       window.webgazer
         .showPredictionPoints(showPoints)
-        .showVideoPreview(true)
+        .showVideoPreview(false)
         .showFaceOverlay(false)
         .showFaceFeedbackBox(false);
     } catch (err: any) {

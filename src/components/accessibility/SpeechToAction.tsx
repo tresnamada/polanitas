@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Mic, MicOff, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { Mic, MicOff, ChevronUp, ChevronDown, Loader2, GripVertical } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGroqSpeech } from "@/hooks/use-groq-speech";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -15,6 +15,7 @@ import { askAboutPage } from "@/actions/page-context-action";
 import { parseFormIntent } from "@/actions/form-intent-action";
 import { dispatchVoiceFormAction } from "@/lib/voice-form-filler";
 import { useAccessibility } from "@/hooks/use-accessibility";
+import { useDraggable } from "@/hooks/use-draggable";
 
 // ── Command map ────────────────────────────────────────────────────────────────
 const ROUTE_COMMANDS: { patterns: string[]; path: string; announce: string }[] = [
@@ -109,6 +110,12 @@ export function SpeechToAction() {
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isAsking, setIsAsking] = useState(false); // AI thinking indicator
+
+  const { position, isDragging, dragHandleProps, containerRef } = useDraggable({
+    storageKey: "polanitas_speech_pos",
+    defaultRight: 32,
+    defaultBottom: 32,
+  });
 
   const [liveTranscript, setLiveTranscript] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -263,7 +270,17 @@ export function SpeechToAction() {
   const isError = status === "error";
 
   return (
-    <div className="flex flex-col items-end gap-3 pointer-events-none">
+    <div
+      ref={containerRef}
+      className="fixed z-[9990]"
+      style={{
+        left: position?.x ?? 0,
+        top: position?.y ?? 0,
+        opacity: position ? 1 : 0,
+        transition: isDragging ? 'none' : 'opacity 0.3s ease',
+      }}
+    >
+     <div className="flex flex-col items-end gap-3">
 
       {/* Feedback toast */}
       <AnimatePresence>
@@ -283,11 +300,15 @@ export function SpeechToAction() {
       </AnimatePresence>
 
       {/* Widget */}
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] pointer-events-auto backdrop-blur-xl bg-opacity-95 transition-all duration-300">
+      <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] backdrop-blur-xl bg-opacity-95 transition-all duration-300">
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3  bg-muted/20">
-          <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:block">
+        {/* Header — drag handle */}
+        <div
+          {...dragHandleProps}
+          className="flex items-center justify-between px-4 py-3 bg-muted/20 select-none"
+        >
+          <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:flex">
+            <GripVertical size={12} className="text-muted shrink-0 opacity-50" />
             {isAsking ? (
               <Loader2 size={14} className="text-primary animate-spin shrink-0" />
             ) : isError ? (
@@ -327,7 +348,7 @@ export function SpeechToAction() {
                 if (next) speak("Aktif. Siap mendengarkan.");
               }}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer border-none outline-none focus:ring-2 focus:ring-primary/50
-                ${enabled ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
+                ${enabled ? "bg-primary text-[color:var(--color-bg)] shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
               title={enabled ? "Matikan mic" : "Aktifkan mic"}
             >
               {enabled ? <Mic size={14} /> : <MicOff size={14} />}
@@ -388,6 +409,7 @@ export function SpeechToAction() {
           )}
         </AnimatePresence>
       </div>
+     </div>
     </div>
   );
 }
