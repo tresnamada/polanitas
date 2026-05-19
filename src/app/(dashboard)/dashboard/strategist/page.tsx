@@ -68,7 +68,7 @@ export default function StrategistPage() {
       {/* ── Script variants ────────────────────────────────────── */}
       <div>
         <h2 style={{ fontWeight: 800, fontSize: "1.0625rem", marginBottom: 16 }}>Varian Skrip yang Dihasilkan</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-[14px]">
           {SCRIPT_VARIANTS.map(({ dur, color, words, note }) => (
             <div key={dur} style={{ background: "var(--color-surface)", border: `1.5px solid ${color}30`, borderRadius: 18, padding: "20px 20px", position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color, opacity: 0.7 }} />

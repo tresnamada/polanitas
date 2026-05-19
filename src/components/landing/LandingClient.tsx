@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Zap,
@@ -10,6 +11,9 @@ import {
   TrendingUp,
   ArrowRight,
   Mic,
+  ArrowUp,
+  Book,
+  X,
 } from "lucide-react";
 import { ThemeLogo } from "@/components/layout/ThemeLogo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
@@ -68,6 +72,7 @@ const FEATURES = [
     desc: "Kumpulkan dan baca data tren secara real-time. Pahami insight konsumen dengan akurat.",
     tag: "Data Scraping",
     color: "#3B82F6",
+    href: "/dashboard/researcher",
   },
   {
     Icon: Brain,
@@ -75,6 +80,7 @@ const FEATURES = [
     desc: "Rancang strategi copywriting viral. Latih pembuatan hook dengan AI terintegrasi.",
     tag: "AI Strategy",
     color: "#8B5CF6",
+    href: "/dashboard/strategist",
   },
   {
     Icon: Eye,
@@ -82,11 +88,14 @@ const FEATURES = [
     desc: "Analisis komprehensif dari hasil data 2 agen sebelumnya, dipadukan dengan evaluasi heatmap visual.",
     tag: "Data & Visual",
     color: "#22C55E",
+    href: "/dashboard/analyst",
   },
 ];
 
 // ── Component ────────────────────────────────────────────────────
 export default function LandingClient() {
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
   return (
     <div className="min-h-dvh bg-bg flex flex-col font-sans overflow-x-hidden relative z-0">
       {/* ── Navigation ─────────────────────────────────────────── */}
@@ -100,7 +109,6 @@ export default function LandingClient() {
           <ThemeLogo height={24} />
         </div>
         <div className="flex gap-4 items-center">
-          <ThemeToggle />
           <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
             <Link
               href="/login"
@@ -113,12 +121,13 @@ export default function LandingClient() {
       </motion.nav>
 
       {/* ── Hero Section ───────────────────────────────────────── */}
-      <main className="flex-1 flex flex-col items-center pt-[140px] pb-20 relative z-10">
+      <main className="flex-1 flex flex-col items-center relative z-10 w-full">
         <motion.section
+          id="hero"
           initial="hidden"
           animate="visible"
           variants={staggerContainer}
-          className="max-w-[900px] text-center px-6 flex flex-col items-center gap-7"
+          className="min-h-screen w-full max-w-[900px] text-center px-6 flex flex-col items-center justify-center gap-7 py-[80px]"
         >
 
           {/* Title */}
@@ -162,154 +171,178 @@ export default function LandingClient() {
           </motion.div>
         </motion.section>
 
-        {/* ── Features Cards ───────────────────────────────────── */}
+        {/* ── Features ──────────────────────────────────────────── */}
         <motion.section
           id="features"
-          className="mt-[100px] w-full max-w-[1100px] px-6"
+          className="min-h-screen w-full max-w-[1100px] px-6 flex flex-col justify-center py-[80px]"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, amount: 0.2 }}
           variants={staggerContainer}
         >
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-6">
-            {FEATURES.map(({ Icon, title, desc, tag, color }, i) => (
+          {/* Section label */}
+          <motion.div variants={fadeUp} custom={0} className="mb-14 text-center">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted mb-3">Ekosistem AI</p>
+            <h2 className="text-[clamp(1.75rem,3.5vw,2.75rem)] font-bold text-primary tracking-tight leading-[1.15]">
+              Tiga Agen, Satu Tujuan
+            </h2>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {FEATURES.map(({ Icon, title, desc, tag, color, href }, i) => (
               <motion.div
                 key={title}
                 variants={fadeUp}
-                custom={i}
-                whileHover={{
-                  y: -6,
-                  boxShadow: "0 20px 40px -12px rgba(0,0,0,0.12)",
-                  transition: { duration: 0.25 },
-                }}
-                className="bg-surface rounded-3xl p-8 border border-border flex flex-col gap-6 cursor-default transition-colors duration-300"
+                custom={i + 1}
+                className="group relative flex flex-col justify-between p-8 rounded-[2rem] bg-surface border border-border hover:border-border-2 hover:shadow-lg transition-all duration-300 overflow-hidden"
               >
-                <div className="flex justify-between items-start">
-                  <motion.div
-                    className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                    style={{ background: `${color}15`, color }}
-                    whileHover={{ rotate: [0, -8, 8, 0], transition: { duration: 0.5 } }}
-                  >
-                    <Icon size={24} strokeWidth={1.5} />
-                  </motion.div>
-                  <span className="chip text-xs bg-bg m-0">{tag}</span>
+                {/* Background Accent Glow */}
+                <div 
+                  className="absolute top-0 right-0 w-32 h-32 opacity-0 group-hover:opacity-[0.15] transition-opacity duration-500 blur-2xl rounded-full pointer-events-none"
+                  style={{ background: color, transform: 'translate(30%, -30%)' }}
+                />
+
+                <div className="relative z-10 flex flex-col gap-6">
+                  <div className="flex justify-between items-start">
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500 group-hover:-translate-y-1 group-hover:shadow-sm"
+                      style={{ background: `${color}15`, color }}
+                    >
+                      <Icon size={24} strokeWidth={1.5} />
+                    </div>
+                    <span className="text-[2.5rem] font-extralight text-border-2 group-hover:text-muted/40 transition-colors duration-300 tabular-nums leading-none">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  
+                  <div>
+                    <div className="mb-4">
+                      <span className="inline-flex items-center text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-muted bg-surface-2 border border-border px-3 py-1 rounded-full">
+                        {tag}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-semibold text-primary tracking-tight mb-3">
+                      {title}
+                    </h3>
+                    <p className="text-secondary text-[0.9375rem] leading-[1.65]">
+                      {desc}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl mb-2 text-primary font-semibold">{title}</h3>
-                  <p className="text-secondary text-[0.9375rem] leading-[1.6]">{desc}</p>
+
+                <div className="relative z-10 mt-8 pt-6 border-t border-border">
+                  <Link href={href} className="w-full flex items-center justify-between group/btn py-2 text-sm font-semibold text-secondary hover:text-primary transition-colors">
+                    <span>Mulai Akses</span>
+                    <div className="w-8 h-8 rounded-full bg-surface-2 border border-border flex items-center justify-center group-hover/btn:bg-primary group-hover/btn:border-primary group-hover/btn:text-bg transition-colors">
+                      <ArrowRight size={14} strokeWidth={2.5} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                    </div>
+                  </Link>
                 </div>
               </motion.div>
             ))}
           </div>
         </motion.section>
 
-        {/* ── Statement Section ─────────────────────────────────── */}
+        {/* ── Accessibility ──────────────────────────────────────── */}
         <motion.section
+          id="accessibility"
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, amount: 0.4 }}
-          className="mt-[60px] md:mt-[100px] w-full max-w-[850px] text-center py-[80px] px-6 relative z-10"
+          viewport={{ once: true, amount: 0.15 }}
+          variants={staggerContainer}
+          className="min-h-screen w-full max-w-[960px] px-6 relative z-10 flex flex-col justify-center py-[80px]"
         >
-          {/* Glowing subtle background */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--color-accent-subtle)_0%,transparent_50%)] opacity-30 blur-xl -z-10 pointer-events-none" />
-
-          {/* Animated top/bottom borders */}
-          <motion.div
-            variants={widthExpand}
-            className="absolute top-0 left-0 right-0 h-px bg-[linear-gradient(to_right,transparent,var(--color-border),transparent)]"
-          />
-          <motion.div
-            variants={widthExpand}
-            className="absolute bottom-0 left-0 right-0 h-px bg-[linear-gradient(to_right,transparent,var(--color-border),transparent)]"
-          />
-
-          <motion.div variants={fadeUp} custom={0}>
-            <div className="w-20 h-20 mx-auto mb-8 rounded-[24px] bg-surface backdrop-blur-md border border-[var(--color-border)] shadow-[0_20px_40px_-15px_var(--color-accent-glow)] flex items-center justify-center text-[var(--color-accent-text)] relative overflow-hidden group">
-              <div className="absolute inset-0 bg-[var(--color-accent-glow)] opacity-[0.15] group-hover:opacity-[0.25] transition-opacity duration-500" />
-              <TrendingUp size={36} strokeWidth={2} className="relative z-10 transition-transform duration-500 group-hover:scale-110" />
-            </div>
+          {/* Illustration */}
+          <motion.div variants={fadeUp} custom={0} className="w-full flex flex-col items-center justify-center mb-16">
+            <img
+              src="/DisabilitasFitur.svg"
+              alt="Ilustrasi Fitur Disabilitas"
+              className="w-full max-w-[640px] h-auto"
+            />
           </motion.div>
 
-          <motion.h2
+          {/* Two-column with vertical divider */}
+          <motion.div
             variants={fadeUp}
             custom={1}
-            className="text-[clamp(2rem,4vw,2.5rem)] font-bold tracking-tight text-primary mb-5"
+            className="w-full grid grid-cols-1 md:grid-cols-[1fr_1px_1fr] gap-10 md:gap-12"
           >
-            Paradigma Baru Analitik Konten
-          </motion.h2>
-
-          <motion.p
-            variants={fadeUp}
-            custom={2}
-            className="text-secondary text-[1.125rem] leading-[1.75] max-w-[700px] mx-auto opacity-90"
-          >
-            Sebagai platform edukasi dan eksekusi, POLANITAS menghadirkan 3 agen AI spesialis (Researcher, Strategist, dan Analyst) yang bekerja secara berkesinambungan untuk memberikan wawasan analitik mendalam dengan antarmuka yang bersih dan intuitif.
-          </motion.p>
-        </motion.section>
-
-        {/* ── Accessibility Section ─────────────────────────────── */}
-        <motion.section
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
-          variants={staggerContainer}
-          className="mt-[80px] w-full max-w-[900px] px-6 relative z-10 flex flex-col items-center text-center"
-        >
-
-          <motion.div variants={fadeUp} className="w-full flex justify-center mb-16">
-            <img src="/DisabilitasFitur.svg" alt="Ilustrasi Fitur Disabilitas" className="w-full max-w-[750px] h-auto" />
-          </motion.div>
-
-          <motion.div variants={fadeUp} className="w-full flex flex-col md:flex-row gap-12 text-left">
-            <div className="flex-1 flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-accent/20 text-accent flex items-center justify-center shrink-0">
-                  <Mic size={24} />
-                </div>
-                <h4 className="text-[1.35rem] font-bold text-primary">Voice-to-Action</h4>
+            {/* Voice-to-Action */}
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-3">
+                <Mic size={20} strokeWidth={1.5} className="text-[var(--color-accent-text)] shrink-0" />
+                <h4 className="text-lg font-semibold text-primary tracking-tight">Voice-to-Action</h4>
               </div>
-              <p className="text-secondary leading-relaxed text-[0.95rem]">
-                Bagi teman-teman <b>tunanetra atau yang memiliki gangguan penglihatan</b>, POLANITAS menghadirkan asisten AI suara. Cukup berbicara untuk menavigasi halaman, mengisi form riset, dan mendengarkan penjelasan materi langsung dari AI.
+              <p className="text-secondary leading-[1.75] text-[0.9375rem]">
+                Bagi teman-teman <span className="text-primary font-medium">tunanetra atau yang memiliki gangguan penglihatan</span>, POLANITAS menghadirkan asisten AI suara. Cukup berbicara untuk menavigasi halaman, mengisi form riset, dan mendengarkan penjelasan materi langsung dari AI.
               </p>
             </div>
 
-            <div className="flex-1 flex flex-col gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-[#8B5CF6]/20 text-[#8B5CF6] flex items-center justify-center shrink-0">
-                  <Eye size={24} />
-                </div>
-                <h4 className="text-[1.35rem] font-bold text-primary">Eye Tracking Navigation</h4>
+            {/* Vertical divider */}
+            <div className="hidden md:block bg-border" />
+
+            {/* Eye Tracking */}
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center gap-3">
+                <Eye size={20} strokeWidth={1.5} className="text-[#8B5CF6] shrink-0" />
+                <h4 className="text-lg font-semibold text-primary tracking-tight">Eye Tracking Navigation</h4>
               </div>
-              <p className="text-secondary leading-relaxed text-[0.95rem]">
-                Bagi teman-teman <b>dengan disabilitas fisik/tangan</b>, POLANITAS mendukung navigasi otomatis lewat tatapan mata (<i>Dwell Click</i>) atau kedipan mata (<i>Blink Click</i>) untuk kemudahan akses penuh tanpa menggunakan mouse atau keyboard.
+              <p className="text-secondary leading-[1.75] text-[0.9375rem]">
+                Bagi teman-teman <span className="text-primary font-medium">dengan disabilitas fisik/tangan</span>, POLANITAS mendukung navigasi otomatis lewat tatapan mata (<em>Dwell Click</em>) atau kedipan mata (<em>Blink Click</em>) untuk kemudahan akses penuh tanpa menggunakan mouse atau keyboard.
               </p>
             </div>
           </motion.div>
-        </motion.section>
-
-        {/* ── Workflow Ecosystem Section ────────────────────────── */}
-        <motion.section
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.2 }}
-          variants={staggerContainer}
-          className="mt-[40px] md:mt-[80px] w-full max-w-[1100px] px-6 relative z-10 flex flex-col items-center"
-        >
-          <motion.div variants={fadeUp} className="text-center mb-16">
-            <div className="inline-flex items-center justify-center px-4 py-1.5 mb-6 rounded-full border border-[var(--color-accent-text)] bg-[var(--color-accent-glow)]/10 text-[var(--color-accent-text)] text-xs font-bold uppercase tracking-wider">
-              Praktik Nyata Data Analyst
-            </div>
-            <h3 className="text-[clamp(1.75rem,3vw,2.5rem)] font-bold text-primary mb-4">Sistem Edukasi Terpadu</h3>
-            <p className="text-secondary max-w-[650px] mx-auto leading-relaxed text-lg">
-              Pelajari alur kerja profesional seorang Data Analyst dengan mempraktikkan langsung delegasi tugas secara berurutan kepada ekosistem 3 AI cerdas kami.
-            </p>
-          </motion.div>
-
-          <motion.div variants={fadeUp} className="w-full flex justify-center mt-4 mb-8">
-            <img src="/Sistem.svg" alt="Sistem Edukasi Terpadu" className="w-full max-w-[1000px] h-auto drop-shadow-sm" />
-          </motion.div>
+          <button 
+            onClick={() => setIsGuideOpen(true)}
+            className="btn btn-secondary rounded-full flex items-center gap-2 mb-10 shadow-sm mt-12"
+          >
+            <Book size={16} /> Panduan Aksesibilitas
+          </button>
         </motion.section>
       </main>
+
+      {/* ── Accessibility Guide Modal ─────────────────────────── */}
+      {isGuideOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-surface border border-border p-8 rounded-2xl shadow-xl max-w-lg w-full relative"
+          >
+            <button onClick={() => setIsGuideOpen(false)} className="absolute top-4 right-4 p-2 hover:bg-surface-2 rounded-full text-muted hover:text-primary transition-colors">
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-accent/20 text-[var(--color-accent-text)] flex items-center justify-center">
+                <Book size={20} />
+              </div>
+              <h3 className="text-xl font-bold text-primary">Panduan Penggunaan</h3>
+            </div>
+            
+            <div className="flex flex-col gap-5 text-secondary text-[0.9375rem] leading-[1.6]">
+              <p>
+                <strong className="text-primary block mb-1">1. Saat Pendaftaran (Register)</strong>
+                Anda dapat memilih fitur aksesibilitas yang dibutuhkan (Tunanetra / Disabilitas Fisik) pada saat membuat akun baru. Sistem akan secara otomatis menyesuaikan antarmuka untuk Anda.
+              </p>
+              <p>
+                <strong className="text-primary block mb-1">2. Voice-to-Action</strong>
+                Gunakan perintah suara untuk menavigasi, menjalankan agen AI, dan mendengarkan penjelasan analitik tanpa harus menyentuh keyboard.
+              </p>
+              <p>
+                <strong className="text-primary block mb-1">3. Eye Tracking</strong>
+                Berikan akses kamera untuk menggerakkan kursor dengan mata Anda. Gunakan kedipan (Blink) atau tahan tatapan (Dwell) untuk mengklik elemen pada layar.
+              </p>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-border flex justify-end">
+              <Link href="/register" className="btn btn-primary px-6 rounded-lg">
+                Daftar Sekarang
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       <motion.footer
@@ -323,12 +356,19 @@ export default function LandingClient() {
           <ThemeLogo height={16} />
           <span className="text-[0.85rem] text-muted">© 2026. All rights reserved.</span>
         </div>
-        <div className="flex gap-6 text-[0.85rem] text-muted">
-          <a href="#" className="text-muted no-underline hover:text-primary transition-colors">Platform</a>
-          <a href="#" className="text-muted no-underline hover:text-primary transition-colors">Dokumentasi</a>
-          <a href="#" className="text-muted no-underline hover:text-primary transition-colors">Ketentuan</a>
-        </div>
       </motion.footer>
+
+      {/* ── Floating Actions ───────────────────────────────────── */}
+      <div className="fixed bottom-8 right-8 z-[100] flex flex-col gap-3 items-center">
+        <ThemeToggle />
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center text-primary shadow-md hover:bg-surface-2 transition-all hover:-translate-y-1"
+          aria-label="Kembali ke atas"
+        >
+          <ArrowUp size={18} strokeWidth={2} />
+        </button>
+      </div>
     </div>
   );
 }

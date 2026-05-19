@@ -276,14 +276,14 @@ export function EyeTrackingNavigation() {
                 className="overflow-hidden border-t border-border bg-surface"
               >
                 <div className="px-4 py-4 flex flex-col gap-3">
-                  <p className="text-xs text-muted-foreground leading-relaxed text-center">
+                  <p className="text-xs text-muted-foreground leading-relaxed text-start md:text-center">
                     Tatap sebuah area selama <b>1.5 detik</b>, atau <b>kedipkan mata</b> untuk klik otomatis.
                   </p>
                   <button
                     onClick={() => setIsCalibrating(true)}
                     className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold py-2.5 px-4 rounded-lg transition-colors border-none cursor-pointer outline-none focus:ring-2 focus:ring-primary/50"
                   >
-                    <Target size={14} /> Kalibrasi Akurasi
+                    <Target size={14} /> Kalibrasi
                   </button>
                 </div>
                 {error && (

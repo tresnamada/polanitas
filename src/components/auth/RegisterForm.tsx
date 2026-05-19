@@ -315,37 +315,6 @@ export default function RegisterForm() {
         </motion.button>
       </div>
 
-      {/* Benefits below card */}
-      <motion.div
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true }}
-        variants={{
-          hidden: { opacity: 0 },
-          visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 1.3 } }
-        }}
-        className="mt-6 flex flex-col gap-3"
-      >
-        {[
-          "Akses 3 AI Agents sekaligus — Researcher, Strategist & Analyst",
-          "Real-time eye tracking untuk analisis konten berbasis data",
-          "Gratis untuk kreator individual",
-        ].map((benefit) => (
-          <motion.div
-            key={benefit}
-            variants={{
-              hidden: { opacity: 0, x: -10 },
-              visible: { opacity: 1, x: 0 }
-            }}
-            className="flex items-start gap-2.5"
-          >
-            <div className="bg-done/10 p-1 rounded-full">
-              <CheckCircle size={14} strokeWidth={2.5} className="shrink-0 text-done" />
-            </div>
-            <span className="text-sm text-secondary font-medium">{benefit}</span>
-          </motion.div>
-        ))}
-      </motion.div>
     </motion.div>
   );
 }
