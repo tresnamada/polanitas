@@ -1,389 +1,635 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useAccessibility } from "@/hooks/use-accessibility";
-import { useWebGazer } from "@/hooks/use-webgazer";
+import { useFaceTracker } from "@/hooks/use-face-tracker";
 import { useDraggable } from "@/hooks/use-draggable";
-import { Eye, EyeOff, Target, ChevronUp, ChevronDown, Loader2, GripVertical } from "lucide-react";
+import {
+  Eye, EyeOff, ChevronUp, ChevronDown,
+  Loader2, GripVertical, AlertCircle, Video, RefreshCw,
+  Move, MousePointerClick, ArrowUp, ArrowDown, Check, X,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// ── Dwell configuration ────────────────────────────────────────────────────────
-const DWELL_RADIUS = 50;
-const DWELL_TIME_MS = 1500;
+// ── Constants ─────────────────────────────────────────────────────────────────
+const CURSOR_HALF      = 20;   // half of cursor dot width/height (px)
+const SCROLL_ZONE_FRAC = 0.16; // top/bottom 16% of viewport = scroll trigger zone
+const SCROLL_SPEED_PX  = 20;   // max px to scroll per tick
+const SCROLL_TICK_MS   = 40;   // scroll update rate (~25fps)
+
+/**
+ * Find the nearest scrollable ancestor element or fall back to documentElement.
+ * Required for Next.js App Router where the scrollable container may be an
+ * inner div, not the window or html element.
+ */
+function findScrollContainer(x: number, y: number): Element {
+  const midY = window.innerHeight / 2;
+  // Walk up from the element at (x, midY) to find a scrollable ancestor
+  let el = document.elementFromPoint(x < 0 ? window.innerWidth / 2 : x, midY);
+  while (el && el !== document.documentElement) {
+    const style  = window.getComputedStyle(el);
+    const ovfY   = style.overflowY;
+    const ovf    = style.overflow;
+    const canScrollY = (ovfY === "auto" || ovfY === "scroll" || ovf === "auto" || ovf === "scroll");
+    if (canScrollY && el.scrollHeight > el.clientHeight) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  return document.documentElement;
+}
+
+// ── CSS injected when tracker is active ──────────────────────────────────────
+const PREVIEW_CSS = `
+#ftPreviewVideo {
+  position: fixed !important;
+  bottom: 100px !important;
+  right: 16px !important;
+  width: 200px !important;
+  height: auto !important;
+  border-radius: 14px !important;
+  z-index: 9985 !important;
+  transform: scaleX(-1) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45) !important;
+  border: 2px solid rgba(99,102,241,0.5) !important;
+  object-fit: cover !important;
+  display: block !important;
+  background: #000 !important;
+}
+`;
 
 export function EyeTrackingNavigation() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
   const { prefs } = useAccessibility(user?.uid);
   const hasHandDisability = prefs?.hasHandDisability ?? false;
 
-  const [enabled, setEnabled] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [enabled,   setEnabled]   = useState(false);
+  const [mounted,   setMounted]   = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [isCalibrating, setIsCalibrating] = useState(false);
 
   const { position, isDragging, dragHandleProps, containerRef } = useDraggable({
-    storageKey: "polanitas_eyetracking_pos",
-    defaultRight: 32,
+    storageKey:    "polanitas_eyetracking_pos",
+    defaultRight:  32,
     defaultBottom: 96,
   });
 
-  // Dwell & Position state
-  const [dwellProgress, setDwellProgress] = useState(0);
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-  const latestCursorPos = useRef({ x: 0, y: 0 });
-  const [feedback, setFeedback] = useState<string | null>(null);
+  // ── Gaze cursor state ─────────────────────────────────────────────────────
+  const [cursorPos,  setCursorPos]  = useState({ x: -1, y: -1 });
+  const [blinkFlash, setBlinkFlash] = useState(false);
+  const cursorRef = useRef({ x: -1, y: -1 });
 
-  const dwellCenter = useRef<{ x: number; y: number } | null>(null);
-  const dwellStartTime = useRef<number>(0);
+  // ── Scroll zone state ─────────────────────────────────────────────────────
+  const [scrollDir,  setScrollDir]  = useState<"up" | "down" | "none">("none");
+  const scrollDirRef = useRef<"up" | "down" | "none">("none");
+
+  // ── Feedback toast ────────────────────────────────────────────────────────
+  const [feedback,     setFeedback]     = useState<string | null>(null);
+  const [feedbackIcon, setFeedbackIcon] = useState<ReactNode>(null);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function showFeedback(msg: string) {
+  function showFeedback(msg: string, icon?: ReactNode) {
     setFeedback(msg);
+    setFeedbackIcon(icon ?? null);
     if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
-    feedbackTimer.current = setTimeout(() => setFeedback(null), 3000);
+    feedbackTimer.current = setTimeout(() => {
+      setFeedback(null);
+      setFeedbackIcon(null);
+    }, 2500);
   }
 
-  // ── Gaze Handler (Dwell Click Logic) ─────────────────────────────────────────
+  // ── Inject / remove preview video CSS ────────────────────────────────────
+  const styleRef = useRef<HTMLStyleElement | null>(null);
+  useEffect(() => {
+    if (enabled) {
+      if (!styleRef.current) {
+        const el = document.createElement("style");
+        el.id          = "ft-preview-css";
+        el.textContent = PREVIEW_CSS;
+        document.head.appendChild(el);
+        styleRef.current = el;
+      }
+    } else {
+      styleRef.current?.remove();
+      styleRef.current = null;
+      const prev = document.getElementById("ftPreviewVideo");
+      if (prev) prev.style.setProperty("display", "none", "important");
+    }
+  }, [enabled]);
+  useEffect(() => () => { styleRef.current?.remove(); }, []);
+
+  // ── Gaze handler — move cursor + detect scroll zone ───────────────────────
   const handleGaze = useCallback((x: number, y: number) => {
-    latestCursorPos.current = { x, y };
+    cursorRef.current = { x, y };
     setCursorPos({ x, y });
 
-    const now = Date.now();
-    if (!dwellCenter.current) {
-      dwellCenter.current = { x, y };
-      dwellStartTime.current = now;
-      setDwellProgress(0);
-      return;
-    }
+    // Check which scroll zone (if any) the cursor is in
+    const yRatio = y / window.innerHeight;
+    let dir: "up" | "down" | "none" = "none";
+    if (yRatio < SCROLL_ZONE_FRAC)          dir = "up";
+    else if (yRatio > 1 - SCROLL_ZONE_FRAC) dir = "down";
 
-    const dist = Math.hypot(x - dwellCenter.current.x, y - dwellCenter.current.y);
-    if (dist > DWELL_RADIUS) {
-      // Reset dwell
-      dwellCenter.current = { x, y };
-      dwellStartTime.current = now;
-      setDwellProgress(0);
-    } else {
-      // Increment dwell
-      const elapsed = now - dwellStartTime.current;
-      const progress = Math.min(100, (elapsed / DWELL_TIME_MS) * 100);
-      setDwellProgress(progress);
-
-      if (progress >= 100) {
-        // Trigger click!
-        const el = document.elementFromPoint(x, y);
-        if (el && el.tagName !== "BODY" && el.tagName !== "HTML") {
-          // Highlight element briefly
-          const htmlEl = el as HTMLElement;
-          const oldOutline = htmlEl.style.outline;
-          htmlEl.style.outline = "3px solid var(--color-primary)";
-          setTimeout(() => {
-            htmlEl.style.outline = oldOutline;
-          }, 300);
-
-          htmlEl.click();
-          showFeedback("🖱️ Dwell Click");
-        }
-        
-        // Reset after click to prevent multi-clicking
-        dwellCenter.current = null;
-        setDwellProgress(0);
-      }
+    if (dir !== scrollDirRef.current) {
+      scrollDirRef.current = dir;
+      setScrollDir(dir);
     }
   }, []);
 
-  // ── Blink Handler (Blink to Click) ───────────────────────────────────────────
+  // ── Blink handler — click element under cursor ────────────────────────────
   const handleBlink = useCallback(() => {
-    const { x, y } = latestCursorPos.current;
-    
+    const { x, y } = cursorRef.current;
+    if (x < 0 || y < 0) return;
+
+    setBlinkFlash(true);
+    setTimeout(() => setBlinkFlash(false), 300);
+
     const el = document.elementFromPoint(x, y);
     if (el && el.tagName !== "BODY" && el.tagName !== "HTML") {
       const htmlEl = el as HTMLElement;
-      const oldOutline = htmlEl.style.outline;
+      const old    = htmlEl.style.outline;
       htmlEl.style.outline = "3px solid var(--color-primary)";
-      setTimeout(() => {
-        htmlEl.style.outline = oldOutline;
-      }, 300);
-
+      setTimeout(() => { htmlEl.style.outline = old; }, 300);
       htmlEl.click();
-      showFeedback("👁️ Blink Click");
+      showFeedback("Klik Kedip", <MousePointerClick size={14} />);
     }
-    
-    // Reset dwell progress as click has happened
-    dwellCenter.current = null;
-    setDwellProgress(0);
   }, []);
 
-  const { isReady, isTracking, error, startTracking, stopTracking } = useWebGazer();
+  const {
+    isReady, isTracking, isFaceDetected, isCalibrating,
+    error, debugEAR, startTracking, stopTracking, recalibrate,
+  } = useFaceTracker(handleGaze, handleBlink);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  // Handle WebGazer video DOM manipulation
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (enabled && isTracking) {
-      interval = setInterval(() => {
-        const slot = document.getElementById('wg-container-slot');
-        if (!slot) return;
-
-        const wgContainer = document.getElementById('webgazerVideoContainer');
-        const video = document.getElementById('webgazerVideoFeed');
-        const canvas = document.getElementById('webgazerVideoCanvas');
-        const faceOverlay = document.getElementById('webgazerFaceOverlay');
-        const feedbackBox = document.getElementById('webgazerFaceFeedbackBox');
-
-        [video, canvas, faceOverlay].forEach((el) => {
-          if (el && el.parentElement !== slot) {
-            slot.appendChild(el);
-          }
-        });
-
-        if (wgContainer) {
-          wgContainer.style.display = 'none';
-        }
-        if (feedbackBox) {
-          feedbackBox.style.display = 'none';
-        }
-
-        [video, canvas, faceOverlay].forEach((el) => {
-          if (el) {
-            el.style.display = 'block';
-            el.style.setProperty('position', 'absolute', 'important');
-            el.style.setProperty('top', '0', 'important');
-            el.style.setProperty('left', '50%', 'important');
-            el.style.setProperty('transform', 'translateX(-50%)', 'important');
-            el.style.setProperty('height', '100%', 'important');
-            el.style.setProperty('width', 'auto', 'important');
-            el.style.setProperty('max-width', 'none', 'important');
-            el.style.setProperty('border-radius', '8px', 'important');
-            el.style.setProperty('z-index', '10', 'important');
-          }
-        });
-
-        if (faceOverlay) {
-          faceOverlay.style.setProperty('z-index', '11', 'important');
-        }
-      }, 500);
-    } else {
-      ['webgazerVideoContainer', 'webgazerVideoFeed', 'webgazerVideoCanvas', 'webgazerFaceOverlay', 'webgazerFaceFeedbackBox'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [enabled, isTracking]);
-
+  // ── Start / stop tracking ─────────────────────────────────────────────────
   useEffect(() => {
     if (enabled && isReady && !isTracking) {
-      // Start with prediction points ON for navigation, pass both gaze and blink handlers
-      startTracking(undefined, true, handleGaze, handleBlink);
+      startTracking();
     } else if (!enabled && isTracking) {
       stopTracking();
-      setDwellProgress(0);
+      setCursorPos({ x: -1, y: -1 });
+      cursorRef.current    = { x: -1, y: -1 };
+      scrollDirRef.current = "none";
+      setScrollDir("none");
     }
-  }, [enabled, isReady, isTracking, startTracking, stopTracking, handleGaze]);
+  }, [enabled, isReady, isTracking, startTracking, stopTracking]);
+
+  // ── Scroll loop — fires every SCROLL_TICK_MS when cursor is in a scroll zone ──
+  useEffect(() => {
+    if (!enabled || !isTracking) {
+      scrollDirRef.current = "none";
+      setScrollDir("none");
+      return;
+    }
+
+    const tick = () => {
+      const dir = scrollDirRef.current;
+      if (dir === "none") return;
+
+      const { x, y } = cursorRef.current;
+      const yRatio   = y / window.innerHeight;
+
+      // Intensity: 0 at zone boundary, 1 at screen edge — faster toward edge
+      const intensity =
+        dir === "up"
+          ? Math.max(0, (SCROLL_ZONE_FRAC - yRatio) / SCROLL_ZONE_FRAC)
+          : Math.max(0, (yRatio - (1 - SCROLL_ZONE_FRAC)) / SCROLL_ZONE_FRAC);
+
+      const amount = Math.round(SCROLL_SPEED_PX * intensity);
+      if (amount === 0) return;
+
+      const delta = dir === "up" ? -amount : amount;
+      console.log(`[Scroll] dir=${dir} y=${Math.round(y)} ratio=${yRatio.toFixed(2)} intensity=${intensity.toFixed(2)} delta=${delta}`);
+
+      // Primary: window.scrollBy — works in most browser/Next.js configs
+      window.scrollBy(0, delta);
+
+      // Secondary: walk DOM to find the actual scrollable container
+      // (covers Next.js App Router layouts with overflow:auto inner divs)
+      const container = findScrollContainer(x, y);
+      if (container !== document.documentElement) {
+        // Only use container scroll if it's NOT the html element (would double-scroll)
+        container.scrollTop += delta;
+      }
+    };
+
+    const id = setInterval(tick, SCROLL_TICK_MS);
+    return () => clearInterval(id);
+  }, [enabled, isTracking]);
 
   if (!mounted) return null;
   if (!hasHandDisability) return null;
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+  const showCursor = enabled && isTracking && !isCalibrating && cursorPos.x >= 0 && cursorPos.y >= 0;
+
+  const statusLabel = !isReady
+    ? "Memuat FaceMesh..."
+    : isCalibrating
+    ? "Kalibrasi posisi..."
+    : isTracking
+    ? isFaceDetected ? "Wajah Terdeteksi" : "Mencari Wajah..."
+    : "Tracker Nonaktif";
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* Calibration Overlay */}
+      {/* ── Scroll zone overlays — appear at screen edges ──────────────────── */}
       <AnimatePresence>
-        {isCalibrating && (
+        {showCursor && scrollDir === "up" && (
           <motion.div
+            key="scroll-up"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] bg-surface/90 backdrop-blur-md flex flex-col items-center justify-center"
+            transition={{ duration: 0.15 }}
+            className="fixed top-0 left-0 right-0 z-[9999] pointer-events-none
+                       flex items-start justify-center pt-3"
+            style={{
+              height:     `${SCROLL_ZONE_FRAC * 100}vh`,
+              background: "linear-gradient(to bottom, rgba(99,102,241,0.22), transparent)",
+            }}
           >
-            <div className="bg-surface border border-border p-8 rounded-3xl shadow-2xl max-w-lg text-center relative z-10 flex flex-col items-center">
-              <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-6 shadow-inner">
-                <Target size={32} />
-              </div>
-              <h2 className="text-2xl font-bold text-foreground mb-3">Kalibrasi Eye Tracking</h2>
-              <p className="text-base text-muted-foreground leading-relaxed mb-8">
-                Untuk hasil terbaik, minta bantuan pendamping untuk mengklik 9 titik merah yang muncul di layar, sambil Anda <b>terus menatap titik tersebut</b> saat diklik.
-              </p>
-              <button 
-                onClick={() => setIsCalibrating(false)}
-                className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold py-3 px-8 rounded-xl shadow-lg shadow-primary/20 transition-all border-none cursor-pointer outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-surface"
-              >
-                Selesai Kalibrasi
-              </button>
-            </div>
-
-            {/* 9 Calibration Dots */}
-            {[
-              { top: "5%", left: "5%" }, { top: "5%", left: "50%" }, { top: "5%", left: "95%" },
-              { top: "50%", left: "5%" }, { top: "50%", left: "50%" }, { top: "50%", left: "95%" },
-              { top: "95%", left: "5%" }, { top: "95%", left: "50%" }, { top: "95%", left: "95%" },
-            ].map((pos, i) => (
-              <button
-                key={i}
-                className="absolute w-8 h-8 bg-red-500 rounded-full border-4 border-white shadow-lg -translate-x-1/2 -translate-y-1/2 cursor-crosshair hover:bg-red-600 transition-colors"
-                style={{ top: pos.top, left: pos.left }}
-                onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  target.style.backgroundColor = "var(--color-done)";
-                }}
-              />
-            ))}
+            <motion.div
+              animate={{ y: [-5, 0, -5] }}
+              transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut" }}
+              className="flex flex-col items-center gap-1 text-primary drop-shadow-lg"
+            >
+              <ArrowUp size={26} strokeWidth={2.5} />
+              <span className="text-[11px] font-bold tracking-widest uppercase">Scroll Atas</span>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Custom Gaze Cursor with Dwell Indicator */}
-      {enabled && isTracking && (
-        <div 
-          className="fixed z-[9998] pointer-events-none transition-transform duration-75 ease-linear"
-          style={{ 
-            left: cursorPos.x, 
-            top: cursorPos.y,
-            transform: "translate(-50%, -50%)"
+      <AnimatePresence>
+        {showCursor && scrollDir === "down" && (
+          <motion.div
+            key="scroll-down"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed bottom-0 left-0 right-0 z-[9999] pointer-events-none
+                       flex items-end justify-center pb-3"
+            style={{
+              height:     `${SCROLL_ZONE_FRAC * 100}vh`,
+              background: "linear-gradient(to top, rgba(99,102,241,0.22), transparent)",
+            }}
+          >
+            <motion.div
+              animate={{ y: [0, 5, 0] }}
+              transition={{ repeat: Infinity, duration: 0.7, ease: "easeInOut" }}
+              className="flex flex-col items-center gap-1 text-primary drop-shadow-lg"
+            >
+              <span className="text-[11px] font-bold tracking-widest uppercase">Scroll Bawah</span>
+              <ArrowDown size={26} strokeWidth={2.5} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Gaze Cursor ──────────────────────────────────────────────────────── */}
+      {showCursor && (
+        <div
+          className="fixed z-[10001] pointer-events-none top-0 left-0"
+          style={{
+            transform:  `translate3d(${cursorPos.x - CURSOR_HALF}px, ${cursorPos.y - CURSOR_HALF}px, 0)`,
+            transition: "none",
           }}
         >
-          <div className="relative flex items-center justify-center">
-            {/* The cursor dot */}
-            <div className="w-3 h-3 bg-primary rounded-full shadow-[0_0_8px_var(--color-primary)]" />
-            
-            {/* Dwell progress ring */}
-            {dwellProgress > 0 && (
-              <svg className="absolute w-12 h-12 -rotate-90 opacity-80" viewBox="0 0 36 36">
-                <path
-                  className="text-border"
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                />
-                <path
-                  className="text-primary transition-all duration-75 ease-linear"
-                  strokeDasharray={`${dwellProgress}, 100`}
-                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                />
-              </svg>
-            )}
+          <div
+            className="relative flex items-center justify-center"
+            style={{ width: CURSOR_HALF * 2, height: CURSOR_HALF * 2 }}
+          >
+            {/* Outer ring */}
+            <motion.div
+              className="absolute rounded-full border-2"
+              style={{
+                width:       CURSOR_HALF * 2,
+                height:      CURSOR_HALF * 2,
+                borderColor: scrollDir !== "none" ? "#818cf8" : "var(--color-primary)",
+              }}
+              animate={{ opacity: blinkFlash ? 1 : 0.35, scale: blinkFlash ? 1.7 : 1 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            />
+            {/* Center dot */}
+            <motion.div
+              className="rounded-full"
+              style={{
+                width:           12,
+                height:          12,
+                backgroundColor: scrollDir !== "none" ? "#818cf8" : "var(--color-primary)",
+                boxShadow:       "0 0 14px var(--color-primary)",
+              }}
+              animate={{ scale: blinkFlash ? 2.2 : 1 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            />
+            {/* Scroll direction arrow above cursor */}
+            <AnimatePresence>
+              {scrollDir !== "none" && (
+                <motion.div
+                  key={scrollDir}
+                  initial={{ opacity: 0, y: scrollDir === "up" ? 4 : -4 }}
+                  animate={{ opacity: 1, y: scrollDir === "up" ? -6 : 6 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute text-primary"
+                  style={{ [scrollDir === "up" ? "bottom" : "top"]: "100%" }}
+                >
+                  {scrollDir === "up"
+                    ? <ArrowUp size={14} strokeWidth={3} />
+                    : <ArrowDown size={14} strokeWidth={3} />}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}
 
-      {/* Widget UI */}
+      {/* ── Auto-calibration overlay ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isCalibrating && isTracking && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-black/70 backdrop-blur-sm
+                       flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-surface border border-border p-8 rounded-3xl shadow-2xl
+                         max-w-sm text-center flex flex-col items-center gap-4"
+            >
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Loader2 size={32} className="text-primary animate-spin" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-foreground mb-2">Kalibrasi Posisi</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Pandang <b>lurus ke kamera</b> dan<br />
+                  tahan posisi kepala selama <b>~1.5 detik</b>.<br />
+                  <span className="text-xs text-amber-600 dark:text-amber-400 mt-2 block">
+                    Posisi ini akan menjadi titik tengah kursor.
+                  </span>
+                </p>
+              </div>
+              <div className={`flex items-center gap-2 text-xs font-semibold ${
+                isFaceDetected ? "text-green-500" : "text-amber-500"
+              }`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${
+                  isFaceDetected ? "bg-green-500" : "bg-amber-500"
+                }`} />
+                {isFaceDetected
+                  ? "Wajah terdeteksi — sampling posisi..."
+                  : "Arahkan wajah ke kamera"}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Widget ────────────────────────────────────────────────────────────── */}
       <div
         ref={containerRef}
         className="fixed z-[9990]"
         style={{
-          left: position?.x ?? 0,
-          top: position?.y ?? 0,
-          opacity: position ? 1 : 0,
-          transition: isDragging ? 'none' : 'opacity 0.3s ease',
+          left:       position?.x ?? 0,
+          top:        position?.y ?? 0,
+          opacity:    position ? 1 : 0,
+          transition: isDragging ? "none" : "opacity 0.3s ease",
         }}
       >
-       <div className="flex flex-col items-end gap-3">
-        <AnimatePresence>
-          {feedback && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -5, scale: 0.95 }}
-              className="bg-surface border border-border rounded-xl px-4 py-3 shadow-xl max-w-[280px] pointer-events-auto backdrop-blur-xl bg-opacity-95"
-            >
-              <p className="text-sm font-semibold text-primary leading-snug">{feedback}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div className="flex flex-col items-end gap-3">
 
-        <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] backdrop-blur-xl bg-opacity-95 transition-all duration-300">
-          {/* Header — drag handle */}
-          <div
-            {...dragHandleProps}
-            className="flex items-center justify-between px-4 py-3 bg-muted/20 select-none"
-          >
-            <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:flex">
-              <GripVertical size={12} className="text-muted shrink-0 opacity-50" />
-              {!isReady ? (
-                <Loader2 size={14} className="text-primary animate-spin shrink-0" />
-              ) : isTracking ? (
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0 shadow-[0_0_8px_rgba(34,197,94,0.5)] animate-pulse" />
-              ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-muted shrink-0" />
-              )}
-              <span className="text-xs font-semibold text-foreground truncate">
-                {!isReady ? "Memuat Tracker..." : isTracking ? "Merekam Mata" : "Tracker Nonaktif"}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {/* Toggle */}
-              <button
-                onClick={() => setEnabled(!enabled)}
-                disabled={!isReady}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer border-none outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed
-                  ${enabled ? "bg-primary text-[color:var(--color-bg)] shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
-                title={enabled ? "Matikan Tracker" : "Aktifkan Tracker"}
-              >
-                {enabled ? <Eye size={14} /> : <EyeOff size={14} />}
-              </button>
-
-              {/* Collapse */}
-              <button
-                onClick={() => setCollapsed(!collapsed)}
-                className="w-8 h-8 rounded-full bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground flex items-center justify-center cursor-pointer border-none outline-none transition-colors"
-              >
-                {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Expandable Body */}
-          <AnimatePresence initial={false}>
-            {!collapsed && (
+          {/* Feedback toast */}
+          <AnimatePresence>
+            {feedback && (
               <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: "easeInOut" }}
-                className="overflow-hidden border-t border-border bg-surface"
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                className="bg-surface border border-border rounded-xl px-4 py-3 shadow-xl
+                           max-w-[280px] pointer-events-auto backdrop-blur-xl"
               >
-                <div className="px-4 py-4 flex flex-col gap-3">
-                  <p className="text-xs text-muted-foreground leading-relaxed text-center">
-                    Tatap sebuah area selama <b>1.5 detik</b>, atau <b>kedipkan mata</b> untuk klik otomatis.
-                  </p>
-
-                  {/* WebGazer Video Container Slot */}
-                  {enabled && (
-                    <div id="wg-container-slot" className="w-full flex justify-center rounded-lg overflow-hidden bg-black/5 min-h-[140px] relative">
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <Loader2 className="w-5 h-5 text-muted animate-spin" />
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setIsCalibrating(true)}
-                    className="w-full flex items-center justify-center gap-2 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold py-2.5 px-4 rounded-lg transition-colors border-none cursor-pointer outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <Target size={14} /> Kalibrasi Akurasi
-                  </button>
+                <div className="flex items-center gap-2 text-primary">
+                  {feedbackIcon}
+                  <p className="text-sm font-semibold leading-snug">{feedback}</p>
                 </div>
-                {error && (
-                  <div className="mx-4 mb-4 text-xs font-medium text-destructive bg-destructive/10 rounded-lg p-2.5 leading-relaxed">
-                    {error}
-                  </div>
-                )}
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden
+                          w-[110px] md:w-[260px] backdrop-blur-xl transition-all duration-300">
+
+            {/* Header / drag handle */}
+            <div
+              {...dragHandleProps}
+              className="flex items-center justify-between px-4 py-3 bg-muted/20 select-none"
+            >
+              <div className="items-center gap-2.5 flex-1 min-w-0 hidden md:flex">
+                <GripVertical size={12} className="text-muted shrink-0 opacity-50" />
+                {!isReady ? (
+                  <Loader2 size={14} className="text-primary animate-spin shrink-0" />
+                ) : isCalibrating ? (
+                  <Loader2 size={14} className="text-amber-500 animate-spin shrink-0" />
+                ) : isTracking && isFaceDetected ? (
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]" />
+                ) : isTracking ? (
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full bg-muted shrink-0" />
+                )}
+                <span className="text-xs font-semibold text-foreground truncate">
+                  {statusLabel}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setEnabled((v) => !v)}
+                  disabled={!isReady}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all
+                    cursor-pointer border-none outline-none focus:ring-2 focus:ring-primary/50
+                    disabled:opacity-50 disabled:cursor-not-allowed
+                    ${enabled
+                      ? "bg-primary text-[color:var(--color-bg)] shadow-lg shadow-primary/30"
+                      : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
+                  title={enabled ? "Matikan Tracker" : "Aktifkan Tracker"}
+                >
+                  {enabled ? <Eye size={14} /> : <EyeOff size={14} />}
+                </button>
+                <button
+                  onClick={() => setCollapsed((v) => !v)}
+                  className="w-8 h-8 rounded-full bg-muted/20 text-muted-foreground hover:bg-muted/40
+                             hover:text-foreground flex items-center justify-center cursor-pointer
+                             border-none outline-none transition-colors"
+                >
+                  {collapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Expandable body */}
+            <AnimatePresence initial={false}>
+              {!collapsed && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden border-t border-border bg-surface"
+                >
+                  <div className="px-4 py-4 flex flex-col gap-3">
+
+                    {/* Calibrating banner */}
+                    {isCalibrating && (
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3
+                                      text-xs text-center text-amber-600 dark:text-amber-400 font-semibold">
+                        Kalibrasi otomatis...<br />
+                        <span className="font-normal">Pandang lurus ke kamera ~1.5 detik</span>
+                      </div>
+                    )}
+
+                    {/* No face warning */}
+                    <AnimatePresence>
+                      {isTracking && !isFaceDetected && !isCalibrating && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex flex-col gap-1"
+                        >
+                          <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold text-xs">
+                            <AlertCircle size={12} />
+                            Wajah tidak terdeteksi
+                          </div>
+                          <ul className="text-xs text-muted-foreground space-y-0.5 pl-1">
+                            <li>• Pastikan wajah terlihat di kamera</li>
+                            <li>• Perbaiki pencahayaan ruangan</li>
+                          </ul>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Instructions */}
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-xs space-y-2">
+                      <div className="font-bold text-foreground text-[11px] uppercase tracking-wide text-center">
+                        Cara Pakai
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Move size={13} className="text-primary shrink-0" />
+                        <span><b>Gerakkan kepala</b> untuk arahkan kursor</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Eye size={13} className="text-primary shrink-0" />
+                        <span><b>Kedipkan mata</b> untuk klik</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <ArrowUp   size={12} className="text-primary shrink-0" />
+                        <ArrowDown size={12} className="text-primary shrink-0 -ml-1.5" />
+                        <span><b>Arahkan ke tepi atas/bawah</b> untuk scroll</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/70 border-t border-border pt-1.5 text-center">
+                        Kedip cepat (150–800ms) = klik. Tepi layar 16% = scroll otomatis.
+                      </div>
+                    </div>
+
+                    {/* Camera hint */}
+                    {enabled && (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground justify-center">
+                        <Video size={11} />
+                        <span>Kamera aktif di pojok kanan bawah</span>
+                      </div>
+                    )}
+
+                    {/* Debug Panel */}
+                    <div className="text-[10px] border border-dashed border-border rounded-lg p-2.5
+                                    font-mono space-y-1 bg-muted/10">
+                      <div className="font-bold text-foreground mb-1 text-center text-[11px]">
+                        Debug
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Tracking</span>
+                        {isTracking
+                          ? <span className="flex items-center gap-0.5 text-green-500"><Check size={9} />ON</span>
+                          : <span className="flex items-center gap-0.5 text-muted-foreground"><X size={9} />OFF</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Kalibrasi</span>
+                        {isCalibrating
+                          ? <span className="text-amber-500">Proses...</span>
+                          : <span className="flex items-center gap-0.5 text-green-500"><Check size={9} />Selesai</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Wajah</span>
+                        {isFaceDetected
+                          ? <span className="flex items-center gap-0.5 text-green-500"><Check size={9} />Terdeteksi</span>
+                          : <span className="flex items-center gap-0.5 text-red-400"><X size={9} />Tidak Ada</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Scroll</span>
+                        {scrollDir === "none"
+                          ? <span className="text-muted-foreground">—</span>
+                          : scrollDir === "up"
+                            ? <span className="flex items-center gap-0.5 text-primary"><ArrowUp size={9} />Atas</span>
+                            : <span className="flex items-center gap-0.5 text-primary"><ArrowDown size={9} />Bawah</span>}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Kursor Y</span>
+                        <span className={(
+                          cursorPos.y >= 0 &&
+                          (cursorPos.y / (typeof window !== 'undefined' ? window.innerHeight : 800)) > (1 - SCROLL_ZONE_FRAC)
+                        ) ? "text-primary font-bold" : "text-foreground"}>
+                          {cursorPos.y < 0 ? "—" : `${cursorPos.y}px (${cursorPos.y > 0 ? Math.round(cursorPos.y / window.innerHeight * 100) : 0}%)`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">EAR</span>
+                        <span className={
+                          debugEAR >= 0 && debugEAR < 0.25
+                            ? "text-red-500 font-bold"
+                            : "text-green-500"
+                        }>
+                          {debugEAR >= 0 ? debugEAR.toFixed(3) : "—"}
+                          {debugEAR >= 0 ? (debugEAR < 0.25 ? " KEDIP" : " buka") : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Recalibrate button */}
+                    <button
+                      onClick={recalibrate}
+                      disabled={!isTracking || isCalibrating}
+                      className="w-full flex items-center justify-center gap-2 bg-primary/10
+                                 text-primary hover:bg-primary/20 text-xs font-semibold py-2.5
+                                 px-4 rounded-lg transition-colors border-none cursor-pointer
+                                 outline-none focus:ring-2 focus:ring-primary/50
+                                 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw size={14} />
+                      Kalibrasi Ulang Posisi Tengah
+                    </button>
+                  </div>
+
+                  {error && (
+                    <div className="mx-4 mb-4 text-xs font-medium text-destructive
+                                    bg-destructive/10 rounded-lg p-2.5 leading-relaxed">
+                      {error}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
-       </div>
       </div>
     </>
   );
