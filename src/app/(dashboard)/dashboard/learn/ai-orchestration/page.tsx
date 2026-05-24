@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AILab } from "@/components/Chatbot";
 import { useSpeechFormFill } from "@/hooks/use-speech-form-fill";
+import { speak } from "@/lib/speech-utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface QuizAnswer {
@@ -279,6 +280,9 @@ export default function AIOrchestrationPage() {
       if (currentLesson > 0) {
         goToLesson(currentLesson - 1);
       }
+    } else if (action.type === "read-lesson-details") {
+      const ttsText = `Materi ke ${currentLesson + 1}: ${lesson.title}. Konsep: ${lesson.concept}. Isi Pelajaran: ${lesson.body.replace(/\*\*(.*?)\*\*/g, "$1")}. Wawasan: ${lesson.insight}. Tantangan Praktik: ${lesson.challenge.replace(/\*\*(.*?)\*\*/g, "$1")}`;
+      speak(ttsText);
     }
   });
 

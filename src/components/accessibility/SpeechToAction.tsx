@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Mic, MicOff, ChevronUp, ChevronDown, Loader2 } from "lucide-react";
+import { Mic, MicOff, ChevronUp, ChevronDown, Loader2, GripVertical } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useGroqSpeech } from "@/hooks/use-groq-speech";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -15,6 +15,8 @@ import { askAboutPage } from "@/actions/page-context-action";
 import { parseFormIntent } from "@/actions/form-intent-action";
 import { dispatchVoiceFormAction } from "@/lib/voice-form-filler";
 import { useAccessibility } from "@/hooks/use-accessibility";
+import { useDraggable } from "@/hooks/use-draggable";
+import { speak } from "@/lib/speech-utils";
 
 // ── Command map ────────────────────────────────────────────────────────────────
 const ROUTE_COMMANDS: { patterns: string[]; path: string; announce: string }[] = [
@@ -31,6 +33,14 @@ const ROUTE_COMMANDS: { patterns: string[]; path: string; announce: string }[] =
   { patterns: ["modul tiga", "modul 3", "materi tiga", "materi 3", "whitespace", "marketplace"], path: "/dashboard/learn/marketplace-whitespace", announce: "Membuka Modul tiga." },
   { patterns: ["modul empat", "modul 4", "materi empat", "materi 4", "eye tracking mastery"], path: "/dashboard/learn/eye-tracking", announce: "Membuka Modul empat." },
   { patterns: ["modul lima", "modul 5", "materi lima", "materi 5", "copywriting", "llm"], path: "/dashboard/learn/llm-copywriting", announce: "Membuka Modul lima." },
+  { patterns: ["modul enam", "modul 6", "materi enam", "materi 6", "content atomization", "atomisasi"], path: "/dashboard/learn/content-atomization", announce: "Membuka Modul enam." },
+  { patterns: ["modul tujuh", "modul 7", "materi tujuh", "materi 7", "neuromarketing"], path: "/dashboard/learn/neuromarketing", announce: "Membuka Modul tujuh." },
+  { patterns: ["modul delapan", "modul 8", "materi delapan", "materi 8", "manajemen krisis", "krisis"], path: "/dashboard/learn/crisis-management", announce: "Membuka Modul delapan." },
+  { patterns: ["modul sembilan", "modul 9", "materi sembilan", "materi 9", "atribusi roi", "atribusi", "roi"], path: "/dashboard/learn/roi-attribution", announce: "Membuka Modul sembilan." },
+  { patterns: ["modul sepuluh", "modul 10", "materi sepuluh", "materi 10", "etika ai", "etika"], path: "/dashboard/learn/ai-ethics", announce: "Membuka Modul sepuluh." },
+  { patterns: ["modul sebelas", "modul 11", "materi sebelas", "materi 11", "influencer matching", "influencer"], path: "/dashboard/learn/influencer-dna", announce: "Membuka Modul sebelas." },
+  { patterns: ["modul dua belas", "modul 12", "materi dua belas", "materi 12", "ab testing", "a b testing"], path: "/dashboard/learn/ab-testing", announce: "Membuka Modul dua belas." },
+  { patterns: ["modul tiga belas", "modul 13", "materi tiga belas", "materi 13", "statistika dasar", "statistika"], path: "/dashboard/learn/statistika-dasar", announce: "Membuka Modul tiga belas." },
 ];
 
 const PATH_NAMES: Record<string, string> = {
@@ -47,7 +57,192 @@ const PATH_NAMES: Record<string, string> = {
   "/dashboard/learn/marketplace-whitespace": "Modul tiga: Whitespace",
   "/dashboard/learn/eye-tracking": "Modul empat: Eye Tracking",
   "/dashboard/learn/llm-copywriting": "Modul lima: Copywriting LLM",
+  "/dashboard/learn/content-atomization": "Modul enam: Content Atomization",
+  "/dashboard/learn/neuromarketing": "Modul tujuh: Neuromarketing",
+  "/dashboard/learn/crisis-management": "Modul delapan: Manajemen Krisis",
+  "/dashboard/learn/roi-attribution": "Modul sembilan: Atribusi ROI",
+  "/dashboard/learn/ai-ethics": "Modul sepuluh: Etika AI",
+  "/dashboard/learn/influencer-dna": "Modul sebelas: Influencer Matching",
+  "/dashboard/learn/ab-testing": "Modul dua belas: A/B Testing",
+  "/dashboard/learn/statistika-dasar": "Modul tiga belas: Statistika Dasar",
 };
+
+// ── Navigation info per page ─────────────────────────────────────────────────
+// Describes what navigation options are available from each page
+const PAGE_NAV_INFO: Record<string, { items: string[]; hint?: string }> = {
+  "/dashboard": {
+    items: ["Materi atau Kurikulum", "Sesi Riset", "Researcher", "Strategist", "Analyst", "Heatmaps", "Laporan"],
+    hint: "Ucapkan 'buka' diikuti nama halaman, misalnya 'buka materi'.",
+  },
+  "/dashboard/learn": {
+    items: [
+      "Modul 1: Orkestrasi AI",
+      "Modul 2: Deteksi Tren Dini",
+      "Modul 3: Whitespace Marketplace",
+      "Modul 4: Psikologi Visual",
+      "Modul 5: Copywriting LLM",
+      "Modul 6: Content Atomization",
+      "Modul 7: Neuromarketing",
+      "Modul 8: Manajemen Krisis",
+      "Modul 9: Atribusi ROI",
+      "Modul 10: Etika AI",
+      "Modul 11: Influencer Matching",
+      "Modul 12: A/B Testing",
+      "Modul 13: Statistika Dasar",
+    ],
+    hint: "Ucapkan 'modul' diikuti nomornya, misalnya 'modul satu'. Atau ucapkan 'kembali' untuk ke Dashboard.",
+  },
+  "/dashboard/sessions": {
+    items: ["Buat sesi riset baru", "Lihat daftar sesi"],
+    hint: "Ucapkan 'mulai riset' untuk membuat sesi baru. Atau 'kembali' untuk ke halaman sebelumnya.",
+  },
+  "/dashboard/heatmaps": {
+    items: ["Lihat data heatmap", "Analisis eye tracking"],
+    hint: "Ucapkan 'kembali' untuk ke halaman sebelumnya.",
+  },
+  "/dashboard/researcher": {
+    items: ["Mulai riset dengan AI Researcher"],
+    hint: "Kamu bisa bertanya tentang fitur ini. Ucapkan 'kembali' untuk ke halaman sebelumnya.",
+  },
+  "/dashboard/strategist": {
+    items: ["Konsultasi strategi dengan AI Strategist"],
+    hint: "Kamu bisa bertanya tentang fitur ini. Ucapkan 'kembali' untuk ke halaman sebelumnya.",
+  },
+  "/dashboard/analyst": {
+    items: ["Analisis data dengan AI Analyst"],
+    hint: "Kamu bisa bertanya tentang fitur ini. Ucapkan 'kembali' untuk ke halaman sebelumnya.",
+  },
+  "/dashboard/reports": {
+    items: ["Lihat laporan performa", "Unduh laporan"],
+    hint: "Ucapkan 'kembali' untuk ke halaman sebelumnya.",
+  },
+};
+
+// Build nav info for each learn module (they all share the same nav pattern)
+const LEARN_MODULE_PATHS = [
+  "/dashboard/learn/ai-orchestration",
+  "/dashboard/learn/trend-signal",
+  "/dashboard/learn/marketplace-whitespace",
+  "/dashboard/learn/eye-tracking",
+  "/dashboard/learn/llm-copywriting",
+  "/dashboard/learn/content-atomization",
+  "/dashboard/learn/neuromarketing",
+  "/dashboard/learn/crisis-management",
+  "/dashboard/learn/roi-attribution",
+  "/dashboard/learn/ai-ethics",
+  "/dashboard/learn/influencer-dna",
+  "/dashboard/learn/ab-testing",
+  "/dashboard/learn/statistika-dasar",
+];
+for (const p of LEARN_MODULE_PATHS) {
+  PAGE_NAV_INFO[p] = {
+    items: ["Baca materi modul ini", "Kembali ke daftar Kurikulum"],
+    hint: "Ucapkan 'kembali' untuk ke Kurikulum, atau sebut modul lain langsung seperti 'modul dua'.",
+  };
+}
+
+// Complete lesson list map for all modules to support "bacakan isi modul" voice command
+const MODULE_LESSONS: Record<string, string[]> = {
+  "ai-orchestration": [
+    "Apa itu AI Orchestration?",
+    "Anatomi Pipeline Multi-Agent",
+    "Dekomposisi Tujuan Bisnis",
+    "Quality Gate & Human Oversight",
+    "Studi Kasus: Kampanye 48 Jam",
+    "Merancang SOP Orkestrasi"
+  ],
+  "trend-signal": [
+    "Noise vs. Sinyal Tren",
+    "Velocity & Acceleration Tren",
+    "Validasi Lintas Platform",
+    "Framework Deteksi Dini"
+  ],
+  "marketplace-whitespace": [
+    "Apa itu Whitespace Marketplace",
+    "Matriks Kompetisi vs. Demand",
+    "Teknik Mining Keyword Long-Tail",
+    "Strategi First-Mover di Celah Pasar"
+  ],
+  "eye-tracking": [
+    "F-Pattern & Z-Pattern",
+    "Fixation Points & Saccades",
+    "Hierarki Visual untuk Konten",
+    "Optimasi Layout Berbasis Data"
+  ],
+  "llm-copywriting": [
+    "Arsitektur Prompt untuk Copywriting",
+    "Personalisasi per Segmen Audiens",
+    "Viral Hook Engineering",
+    "Quality Control Output LLM"
+  ],
+  "content-atomization": [
+    "Prinsip Content Atomization",
+    "Satu Ide → Puluhan Format",
+    "Platform-Native Adaptation",
+    "Workflow Atomisasi dengan AI"
+  ],
+  "neuromarketing": [
+    "Beban Kognitif & Keputusan",
+    "Psikologi Warna dalam Marketing",
+    "Desain Dashboard yang Efektif",
+    "Nudge Theory untuk Konversi"
+  ],
+  "crisis-management": [
+    "Anatomi Krisis Digital",
+    "Deteksi Sentimen Real-Time",
+    "Framework Respons Empati",
+    "Post-Crisis Recovery"
+  ],
+  "roi-attribution": [
+    "Engagement ke Revenue",
+    "Model Atribusi",
+    "ROAS & Customer Lifetime Value",
+    "Dashboard Atribusi untuk Tim"
+  ],
+  "ai-ethics": [
+    "Kenapa Etika AI Penting",
+    "Guardrails & Content Filtering",
+    "UU PDP & Compliance Digital",
+    "Framework Governance AI"
+  ],
+  "influencer-dna": [
+    "Evolusi Influencer Marketing",
+    "Vector Search & Semantic Matching",
+    "DNA Matching: Vibe, Audiens, Values",
+    "Kalkulasi ROI Kolaborasi"
+  ],
+  "ab-testing": [
+    "A/B Testing Tradisional Lambat",
+    "Multi-Armed Bandit vs A/B",
+    "AI-Driven Creative Iteration",
+    "Statistical Significance & Decision"
+  ],
+  "statistika-dasar": [
+    "Mean (Rata-rata)",
+    "Median (Nilai Tengah)",
+    "Standar Deviasi",
+    "Distribusi Data & Histogram",
+    "Korelasi & Hubungan Antar Variabel",
+    "Outlier & Deteksi Anomali"
+  ]
+};
+
+/**
+ * Build a TTS-friendly announcement of available navigation for a given path.
+ * Returns null if no nav info is registered for the path.
+ */
+function getNavAnnouncement(path: string): string | null {
+  const info = PAGE_NAV_INFO[path];
+  if (!info) return null;
+
+  const itemList = info.items.length <= 3
+    ? info.items.join(", dan ")
+    : info.items.slice(0, -1).join(", ") + ", dan " + info.items[info.items.length - 1];
+
+  let msg = `Di halaman ini tersedia: ${itemList}.`;
+  if (info.hint) msg += ` ${info.hint}`;
+  return msg;
+}
 
 // Whisper sometimes returns these for silence — ignore silently
 const NOISE_PATTERNS = [
@@ -65,6 +260,8 @@ const INTENT_WORDS = [
   "dashboard", "materi", "sesi", "riset",
   "heatmap", "researcher", "strategist", "analyst",
   "laporan", "halaman", "di mana", "home",
+  // Navigation info intents
+  "navigasi", "menu", "daftar", "ada apa", "bisa ke mana",
   // Question intents
   "apa", "ada", "bisa", "jelaskan", "ceritakan",
   "ajarkan", "ajarin", "pelajari", "beritahu", "info",
@@ -87,14 +284,7 @@ function normalize(text: string) {
   return text.toLowerCase().replace(/[.,!?;:]/g, "").replace(/\s+/g, " ").trim();
 }
 
-function speak(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = "id-ID";
-  utt.rate = 0.92;
-  window.speechSynthesis.speak(utt);
-}
+// speak utility function is imported from speech-utils
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export function SpeechToAction() {
@@ -109,6 +299,12 @@ export function SpeechToAction() {
   const [mounted, setMounted] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [isAsking, setIsAsking] = useState(false); // AI thinking indicator
+
+  const { position, isDragging, dragHandleProps, containerRef } = useDraggable({
+    storageKey: "polanitas_speech_pos",
+    defaultRight: 32,
+    defaultBottom: 32,
+  });
 
   const [liveTranscript, setLiveTranscript] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -140,11 +336,15 @@ export function SpeechToAction() {
   useEffect(() => {
     chatHistoryRef.current = [];
     setChatHistory([]);
-    if (!enabled || !isBlindUser) return;
+    if (!isBlindUser) return;
     const name = PATH_NAMES[pathname] ?? pathname;
-    const t = setTimeout(() => speak(`Halaman ${name}. Ucapkan perintah.`), 700);
+    const navInfo = getNavAnnouncement(pathname);
+    const announcement = navInfo
+      ? `Halaman ${name}. ${navInfo}`
+      : `Halaman ${name}. Ucapkan perintah.`;
+    const t = setTimeout(() => speak(announcement), 700);
     return () => clearTimeout(t);
-  }, [pathname, enabled, isBlindUser]);
+  }, [pathname, isBlindUser]);
 
   // ── Command handler (called after Groq returns transcript) ────────────────
   const handleTranscript = useCallback(
@@ -179,12 +379,54 @@ export function SpeechToAction() {
         return;
       }
 
-      // Repeat
+      // Repeat location
       if (text.includes("ulangi") || text.includes("di mana") || text.includes("halaman apa")) {
         const name = PATH_NAMES[pathname] ?? pathname;
-        speak(`Kamu berada di ${name}.`);
+        const navInfo = getNavAnnouncement(pathname);
+        const msg = navInfo
+          ? `Kamu berada di ${name}. ${navInfo}`
+          : `Kamu berada di ${name}.`;
+        speak(msg);
         showFeedback(`📍 ${name}`);
         return;
+      }
+
+      // Navigation info — "apa navigasinya", "ada apa di sini", "bisa ke mana", "menu"
+      if (
+        text.includes("navigasi") ||
+        text.includes("ada apa") ||
+        text.includes("bisa ke mana") ||
+        (text.includes("menu") && !text.includes("buka")) ||
+        (text.includes("daftar") && text.includes("halaman"))
+      ) {
+        const name = PATH_NAMES[pathname] ?? pathname;
+        const navInfo = getNavAnnouncement(pathname);
+        if (navInfo) {
+          speak(navInfo);
+          showFeedback(`🧭 Navigasi: ${name}`);
+        } else {
+          speak(`Tidak ada informasi navigasi khusus untuk halaman ini. Ucapkan 'kembali' untuk ke halaman sebelumnya.`);
+          showFeedback(`🧭 ${name}`);
+        }
+        return;
+      }
+
+      // Check if user wants to hear the lesson list for the active module
+      if (
+        (text.includes("materi") || text.includes("modul") || text.includes("pelajaran") || text.includes("isi")) &&
+        (text.includes("daftar") || text.includes("apa saja") || text.includes("sebutkan") || text.includes("bacakan")) &&
+        !text.includes("lengkap")
+      ) {
+        const moduleId = pathname.split("/").pop();
+        if (moduleId && MODULE_LESSONS[moduleId]) {
+          const lessons = MODULE_LESSONS[moduleId];
+          const lessonList = lessons.map((l, idx) => `Materi ke ${idx + 1}: ${l}`).join(". ");
+          const name = PATH_NAMES[pathname] ?? pathname;
+          const msg = `Modul ${name} terdiri dari ${lessons.length} materi: ${lessonList}. Ucapkan 'bacakan materi secara lengkap' untuk membaca materi yang sedang aktif.`;
+          speak(msg);
+          showFeedback(`📚 Daftar Materi: ${name}`);
+          return;
+        }
       }
 
       // Back (Special handling: skip if it sounds like lesson navigation)
@@ -263,7 +505,17 @@ export function SpeechToAction() {
   const isError = status === "error";
 
   return (
-    <div className="flex flex-col items-end gap-3 pointer-events-none">
+    <div
+      ref={containerRef}
+      className="fixed z-[9990]"
+      style={{
+        left: position?.x ?? 0,
+        top: position?.y ?? 0,
+        opacity: position ? 1 : 0,
+        transition: isDragging ? 'none' : 'opacity 0.3s ease',
+      }}
+    >
+     <div className="flex flex-col items-end gap-3">
 
       {/* Feedback toast */}
       <AnimatePresence>
@@ -283,11 +535,15 @@ export function SpeechToAction() {
       </AnimatePresence>
 
       {/* Widget */}
-      <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] pointer-events-auto backdrop-blur-xl bg-opacity-95 transition-all duration-300">
+      <div className="bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden w-[100px] md:w-[260px] backdrop-blur-xl bg-opacity-95 transition-all duration-300">
         
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3  bg-muted/20">
-          <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:block">
+        {/* Header — drag handle */}
+        <div
+          {...dragHandleProps}
+          className="flex items-center justify-between px-4 py-3 bg-muted/20 select-none"
+        >
+          <div className="flex items-center gap-2.5 flex-1 min-w-0 hidden md:flex">
+            <GripVertical size={12} className="text-muted shrink-0 opacity-50" />
             {isAsking ? (
               <Loader2 size={14} className="text-primary animate-spin shrink-0" />
             ) : isError ? (
@@ -327,7 +583,7 @@ export function SpeechToAction() {
                 if (next) speak("Aktif. Siap mendengarkan.");
               }}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer border-none outline-none focus:ring-2 focus:ring-primary/50
-                ${enabled ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
+                ${enabled ? "bg-primary text-[color:var(--color-bg)] shadow-lg shadow-primary/30" : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
               title={enabled ? "Matikan mic" : "Aktifkan mic"}
             >
               {enabled ? <Mic size={14} /> : <MicOff size={14} />}
@@ -388,6 +644,7 @@ export function SpeechToAction() {
           )}
         </AnimatePresence>
       </div>
+     </div>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   VolumeX,
   PlayCircle,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveUserProfile, UserProfile } from "@/hooks/use-accessibility";
@@ -502,8 +503,23 @@ export default function ProfileSetupForm({ uid, initialName = "" }: Props) {
           ) : (
             <button type="button" onClick={handleSubmit} disabled={isPending}
               className="btn btn-primary flex-1 justify-center py-2.5 flex items-center gap-1.5">
-              {isPending ? "Menyimpan..." : "Selesai & Mulai"}
-              {!isPending && <ArrowRight size={14} />}
+              {isPending ? (
+                <>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    className="flex items-center justify-center"
+                  >
+                    <Loader2 size={15} strokeWidth={2.5} />
+                  </motion.div>
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  Selesai & Mulai
+                  <ArrowRight size={14} />
+                </>
+              )}
             </button>
           )}
         </div>

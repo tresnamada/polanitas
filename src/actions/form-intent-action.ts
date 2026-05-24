@@ -34,12 +34,13 @@ DAFTAR AKSI FORM YANG DIDUKUNG UNTUK HALAMAN /dashboard/sessions:
 7. set-lesson: Berpindah ke materi nomor tertentu. (contoh: "buka materi kedua", "materi ke 3"). Ubah kata bilangan ke index 0.
 8. next-lesson: Berpindah ke materi/pelajaran berikutnya. (contoh: "materi selanjutnya", "berikutnya", "lanjut").
 9. prev-lesson: Berpindah ke materi/pelajaran sebelumnya. (contoh: "materi sebelumnya", "kembali ke materi tadi").
+10. read-lesson-details: Membaca lengkap isi materi/pelajaran yang sedang aktif. (contoh: "bacakan materi secara lengkap", "bacakan isi pelajaran", "bacakan isi modul secara lengkap", "baca lengkap").
 
 FORMAT JSON OUTPUT YANG WAJIB DIIKUTI:
 {
   "isFormAction": boolean,
   "action": {
-    "type": "set-topic" | "set-audience" | "set-region" | "toggle-platform" | "set-focus" | "submit-form" | "set-lesson" | "next-lesson" | "prev-lesson",
+    "type": "set-topic" | "set-audience" | "set-region" | "toggle-platform" | "set-focus" | "submit-form" | "set-lesson" | "next-lesson" | "prev-lesson" | "read-lesson-details",
     "value": string,
     "code": string,
     "platform": string,
@@ -55,7 +56,10 @@ CONTOH 1: "tolong isi topiknya tentang skincare korea"
 CONTOH 2: "pilih platform tiktok dan shopee" (Hanya bisa proses 1 per request, pilih yang pertama, atau biarkan sistem menangani. Karena format action hanya support 1 platform untuk toggle-platform, pilih salah satu atau jika butuh banyak pakai set-platforms. Untuk sekarang, support single action saja dulu)
 {"isFormAction": true, "action": {"type": "toggle-platform", "platform": "tiktok"}, "reply": "Mengubah status platform TikTok."}
 
-CONTOH 3: "apa itu whitespace?"
+CONTOH 3: "bacakan isi pelajaran secara lengkap"
+{"isFormAction": true, "action": {"type": "read-lesson-details"}, "reply": "Membacakan isi materi secara lengkap."}
+
+CONTOH 4: "apa itu whitespace?"
 {"isFormAction": false}
 
 Output HANYA berupa JSON valid tanpa format markdown \`\`\`json.

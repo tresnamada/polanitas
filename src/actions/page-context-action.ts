@@ -123,14 +123,85 @@ Topik yang dibahas:
 
   "/dashboard/learn/llm-copywriting": `
 Ini adalah Modul 5: Copywriting LLM — 1.000 Variasi Caption via Llama 3.
-Level: Menengah. Terdiri dari 7 pelajaran, estimasi 3 jam.
-Topik yang dibahas:
-- Arsitektur prompt yang efektif untuk copywriting (Framework CRISP)
-- Personalisasi caption per segmen audiens menggunakan LLM
-- Viral Hook Engineering: rumus Hook × CTA × Urgency
-- Membuat ratusan variasi caption yang tetap konsisten dengan brand voice
-- A/B testing copy menggunakan AI
-- Mengintegrasikan tone of voice ke dalam prompt sistem
+Level: Menengah. Terdiri dari 4 pelajaran utama:
+1. Arsitektur Prompt untuk Copywriting — Menjelaskan framework CRISP untuk prompt copywriting yang konsisten.
+2. Personalisasi per Segmen Audiens — Cara membuat variasi pesan per segmen tanpa mengubah brand voice.
+3. Viral Hook Engineering — Rumus Hook kali CTA kali Urgency untuk memicu interaksi.
+4. Quality Control Output LLM — Framework QC 4-Layer (Fakta, Brand, Legal, A/B) agar konten Publishing-Ready.
+  `.trim(),
+
+  "/dashboard/learn/content-atomization": `
+Ini adalah Modul 6: Content Atomization — Memecah Satu Ide Menjadi Puluhan Format.
+Level: Menengah. Terdiri dari 4 pelajaran utama:
+1. Prinsip Content Atomization — Cara memecah ide besar menjadi format micro-content.
+2. Satu Ide menjadi Puluhan Format — Teknik repurposing konten ke multi-platform.
+3. Platform-Native Adaptation — Menyesuaikan vibe konten agar cocok dengan algoritma TikTok, Reels, dan YouTube Shorts.
+4. Workflow Atomisasi dengan AI — Menggunakan agen AI untuk mengotomatiskan seluruh alur kerja repurposing.
+  `.trim(),
+
+  "/dashboard/learn/neuromarketing": `
+Ini adalah Modul 7: Neuromarketing — Desain Analitik untuk Keputusan 30 Detik.
+Level: Lanjutan. Terdiri dari 4 pelajaran utama:
+1. Beban Kognitif & Keputusan — Cara meminimalkan beban kognitif agar user bisa mengambil keputusan dengan cepat.
+2. Psikologi Warna dalam Marketing — Memahami korelasi emosi warna terhadap perilaku pembelian konsumen.
+3. Desain Dashboard yang Efektif — Prinsip kegunaan visual untuk menyajikan metrik penting.
+4. Nudge Theory untuk Konversi — Taktik psikologis halus untuk meningkatkan tingkat konversi landing page.
+  `.trim(),
+
+  "/dashboard/learn/crisis-management": `
+Ini adalah Modul 8: Manajemen Krisis — Respon Sentimen Otomatis.
+Level: Lanjutan. Terdiri dari 4 pelajaran utama:
+1. Anatomi Krisis Digital — Memahami asal-usul krisis di media sosial dan siklus hidupnya.
+2. Deteksi Sentimen Real-Time — Menggunakan AI untuk mengidentifikasi sentimen negatif sejak awal.
+3. Framework Respons Empati — Cara menyusun balasan humas yang empatik dan meredam ketegangan secara otomatis.
+4. Post-Crisis Recovery — Strategi memulihkan citra brand pasca kontroversi berdasarkan data historis.
+  `.trim(),
+
+  "/dashboard/learn/roi-attribution": `
+Ini adalah Modul 9: Atribusi ROI — Engagement ke Sales Marketplace.
+Level: Lanjutan. Terdiri dari 4 pelajaran utama:
+1. Engagement ke Revenue — Cara melacak dampak suka, komentar, dan bagikan terhadap konversi penjualan riil.
+2. Model Atribusi — Perbandingan model atribusi First-Click, Last-Click, Linear, dan berbasis data.
+3. ROAS & Customer Lifetime Value — Mengukur keekonomian iklan secara akurat.
+4. Dashboard Atribusi untuk Tim — Mendesain visualisasi data kontribusi saluran pemasaran agar mudah dimengerti tim.
+  `.trim(),
+
+  "/dashboard/learn/ai-ethics": `
+Ini adalah Modul 10: Etika AI & Brand Safety.
+Level: Fundamental. Terdiri dari 4 pelajaran utama:
+1. Kenapa Etika AI Penting — Menjaga kepercayaan audiens dan integritas reputasi brand.
+2. Guardrails & Content Filtering — Sistem penyaringan kata dan pengaman konten hasil generasi AI.
+3. UU PDP & Compliance Digital — Kepatuhan hukum perlindungan data pribadi dalam pemrosesan data oleh AI.
+4. Framework Governance AI — Struktur kebijakan internal perusahaan untuk penggunaan AI yang aman.
+  `.trim(),
+
+  "/dashboard/learn/influencer-dna": `
+Ini adalah Modul 11: Influencer DNA Matching — Vibe Matching dengan Vector Search.
+Level: Lanjutan. Terdiri dari 4 pelajaran utama:
+1. Evolusi Influencer Marketing — Dari jangkauan massal ke keselarasan nilai (niche values).
+2. Vector Search & Semantic Matching — Memahami representasi numerik video untuk pencocokan kemiripan.
+3. DNA Matching: Vibe, Audiens, Values — Algoritma mencocokkan kepribadian influencer dengan citra brand.
+4. Kalkulasi ROI Kolaborasi — Cara memprediksi ROI sebelum menandatangani kontrak kerja sama.
+  `.trim(),
+
+  "/dashboard/learn/ab-testing": `
+Ini adalah Modul 12: A/B Testing Agresif — 50 Variasi Iklan, Iterasi Otomatis.
+Level: Lanjutan. Terdiri dari 4 pelajaran utama:
+1. A/B Testing Tradisional Lambat — Kelemahan pendekatan split-test lama yang memakan waktu berminggu-minggu.
+2. Multi-Armed Bandit vs A/B — Efisiensi algoritma alokasi traffic real-time untuk iklan berkinerja terbaik.
+3. AI-Driven Creative Iteration — Iterasi otomatis teks dan visual iklan menggunakan AI generatif.
+4. Statistical Significance & Decision — Menghitung signifikansi statistik agar keputusan didukung data ilmiah.
+  `.trim(),
+
+  "/dashboard/learn/statistika-dasar": `
+Ini adalah Modul 13: Statistika Dasar — Konsep Fundamental Pengolahan Data.
+Level: Fundamental. Terdiri dari 6 pelajaran utama:
+1. Mean (Rata-rata) — Cara menghitung nilai rata-rata kelompok data dan kegunaannya.
+2. Median (Nilai Tengah) — Mengidentifikasi nilai tengah untuk menepis bias dari nilai ekstrem.
+3. Standar Deviasi — Mengukur tingkat persebaran data untuk melihat konsistensi performa.
+4. Distribusi Data & Histogram — Membaca bentuk visual kurva distribusi data.
+5. Korelasi & Hubungan Antar Variabel — Memahami hubungan timbal balik antar metrik pemasaran.
+6. Outlier & Deteksi Anomali — Cara menemukan anomali data pemasaran yang mencurigakan.
   `.trim(),
 };
 
@@ -150,7 +221,7 @@ export async function askAboutPage(
   const groq = getGeneralClient();
 
   const GLOBAL_MODULES = `
-DAFTAR LENGKAP 12 MODUL KURIKULUM POLANITAS:
+DAFTAR LENGKAP 13 MODUL KURIKULUM POLANITAS:
 1. Orkestrasi AI — Menjadi dirigen jaringan agen (Fundamental)
 2. Deteksi Tren Dini — Sinyal tren TikTok sebelum viral (Menengah)
 3. Whitespace Marketplace — Celah pasar Shopee & Tokopedia (Menengah)
@@ -163,6 +234,7 @@ DAFTAR LENGKAP 12 MODUL KURIKULUM POLANITAS:
 10. Etika AI & Brand Safety — Guardrails, UU PDP, Compliance (Fundamental)
 11. Influencer DNA Matching — Vibe matching dengan vector search (Lanjutan)
 12. A/B Testing Agresif — 50 variasi iklan, iterasi otomatis (Lanjutan)
+13. Statistika Dasar — Konsep fundamental pengolahan data (Fundamental)
   `.trim();
 
   const systemPrompt = `

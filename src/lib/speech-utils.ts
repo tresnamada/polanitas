@@ -18,3 +18,13 @@ export const QUESTION_INTENT_PATTERNS = [
 export function isQuestion(text: string): boolean {
   return QUESTION_INTENT_PATTERNS.some((p) => text.includes(p));
 }
+
+/** TTS Speech function for Indonesian voice */
+export function speak(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = "id-ID";
+  utt.rate = 0.92;
+  window.speechSynthesis.speak(utt);
+}

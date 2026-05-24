@@ -11,7 +11,7 @@ import {
 import { auth } from "@/lib/firebase-client";
 import { createSession } from "@/actions/auth-actions";
 import { isProfileCompleted } from "@/hooks/use-accessibility";
-import { Mail, Lock, LogIn, AlertCircle, Globe } from "lucide-react";
+import { Mail, Lock, LogIn, AlertCircle, Globe, Loader2 } from "lucide-react";
 import { ThemeLogo } from "@/components/layout/ThemeLogo";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -202,8 +202,9 @@ export default function LoginForm() {
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="flex items-center justify-center"
               >
-                <LogIn size={15} strokeWidth={2.5} />
+                <Loader2 size={15} strokeWidth={2.5} />
               </motion.div>
             ) : (
               <LogIn size={15} strokeWidth={2.5} />

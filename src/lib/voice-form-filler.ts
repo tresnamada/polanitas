@@ -18,6 +18,7 @@ export type VoiceFormAction =
   | { type: "set-lesson"; index: number }
   | { type: "next-lesson" }
   | { type: "prev-lesson" }
+  | { type: "read-lesson-details" }
   | { type: "submit-form" };
 
 /** Dispatch a form action to any listening page component */

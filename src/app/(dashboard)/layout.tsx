@@ -44,11 +44,9 @@ export default function DashboardLayout({
       {/* Mobile Nav */}
       <BottomNav />
 
-      {/* Accessibility Widgets Container */}
-      <div className="fixed bottom-24 md:bottom-8 right-4 md:right-8 z-[9990] flex flex-col gap-1 pointer-events-none">
-        <EyeTrackingNavigation />
-        <SpeechToAction />
-      </div>
+      {/* Accessibility Widgets (each manages its own fixed position) */}
+      <EyeTrackingNavigation />
+      <SpeechToAction />
     </div>
   );
 }
